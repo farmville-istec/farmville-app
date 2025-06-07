@@ -41,4 +41,53 @@ export const authAPI = {
   },
 }
 
+export const weatherAPI = {
+  getWeather: async (location: string, latitude?: number, longitude?: number) => {
+    const params = new URLSearchParams()
+    if (latitude !== undefined) params.append('lat', latitude.toString())
+    if (longitude !== undefined) params.append('lon', longitude.toString())
+    
+    const response = await api.get(`/api/weather/${location}?${params.toString()}`)
+    return response.data
+  },
+}
+
+export const agroAPI = {
+  analyzeWeather: async (location: string, latitude: number, longitude: number) => {
+    const response = await api.post("/api/agro/analyze", {
+      location,
+      latitude,
+      longitude,
+    })
+    return response.data
+  },
+
+  quickAnalysis: async (temperature: number, humidity: number, description: string, location: string) => {
+    const response = await api.post("/api/agro/quick-analyze", {
+      temperature,
+      humidity,
+      description,
+      location,
+    })
+    return response.data
+  },
+
+  bulkAnalysis: async (locations: Array<{name: string, latitude: number, longitude: number}>) => {
+    const response = await api.post("/api/agro/bulk-analyze", {
+      locations,
+    })
+    return response.data
+  },
+
+  getCacheInfo: async () => {
+    const response = await api.get("/api/agro/cache-info")
+    return response.data
+  },
+
+  getObserverStats: async () => {
+    const response = await api.get("/api/agro/observer-stats")
+    return response.data
+  },
+}
+
 export default api
