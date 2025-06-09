@@ -1,14 +1,17 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, BarChart3, MapPin, Sprout, RefreshCw, Settings } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import TerrainWidget from '../components/TerrainWidget'
 import type { Terrain, AgroSuggestion } from '../types/agro'
 import { DEFAULT_LOCATIONS } from '../types/agro'
-import { agroAPI } from '../services/api'
+import { agroAPI, terrainAPI } from '../services/api'
 
 export default function AgroDashboard() {
   const { user } = useAuth()
   const [terrains, setTerrains] = useState<Terrain[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [isAddingTerrain, setIsAddingTerrain] = useState(false)
   const [newTerrain, setNewTerrain] = useState({
     name: '',
@@ -26,83 +29,135 @@ export default function AgroDashboard() {
     lastUpdate: new Date()
   })
 
-  // Load terrains from localStorage on mount
-  useEffect(() => {
-    const savedTerrains = localStorage.getItem(`farmville_terrains_${user?.id}`)
-    if (savedTerrains) {
-      setTerrains(JSON.parse(savedTerrains))
-    } else {
-      // Initialize with some default terrains
-      const defaultTerrains: Terrain[] = DEFAULT_LOCATIONS.map((loc, index) => ({
-        id: `terrain_${index}`,
-        name: `${loc.name} Farm`,
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        crop_type: index === 0 ? 'Wheat' : index === 1 ? 'Corn' : 'Vegetables',
-        area_hectares: 10 + index * 5,
-        notes: `Farm located in ${loc.name}`,
-        created_at: new Date().toISOString(),
-        last_updated: new Date().toISOString()
-      }))
-      setTerrains(defaultTerrains)
+  // Load terrains from backend API
+  const loadTerrains = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await terrainAPI.getUserTerrains()
+      
+      if (response.success) {
+        setTerrains(response.terrains)
+      } else {
+        setError('Failed to load terrains')
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load terrains')
+      console.error('Error loading terrains:', err)
+    } finally {
+      setLoading(false)
     }
-  }, [user?.id])
+  }, [])
 
-  const updateDashboardStats = useCallback(() => {
-    setDashboardStats({
-      totalTerrains: terrains.length,
-      urgentAlerts: 0, // This would be calculated from actual suggestions
-      avgConfidence: 85, // This would be calculated from actual suggestions
-      lastUpdate: new Date()
-    })
-  }, [terrains])
-
-  // Save terrains to localStorage whenever terrains change
+  // Load terrains on component mount
   useEffect(() => {
     if (user?.id) {
-      localStorage.setItem(`farmville_terrains_${user.id}`, JSON.stringify(terrains))
+      loadTerrains()
     }
-    updateDashboardStats()
-  }, [terrains, user?.id, updateDashboardStats])
+  }, [user?.id, loadTerrains])
 
-  const addTerrain = () => {
+  // Update dashboard stats when terrains change
+  const updateDashboardStats = useCallback(async () => {
+    try {
+      const response = await terrainAPI.getTerrainStats()
+      if (response.success) {
+        setDashboardStats({
+          totalTerrains: response.stats.total_terrains,
+          urgentAlerts: 0, // Would be calculated from actual suggestions
+          avgConfidence: 85, // Would be calculated from actual suggestions
+          lastUpdate: new Date()
+        })
+      }
+    } catch (err) {
+      console.error('Error updating stats:', err)
+    }
+  }, [])
+
+  useEffect(() => {
+    updateDashboardStats()
+  }, [terrains, updateDashboardStats])
+
+  const addTerrain = async () => {
     if (!newTerrain.name.trim()) return
 
-    const terrain: Terrain = {
-      id: `terrain_${Date.now()}`,
-      name: newTerrain.name,
-      latitude: newTerrain.latitude,
-      longitude: newTerrain.longitude,
-      crop_type: newTerrain.crop_type || undefined,
-      area_hectares: newTerrain.area_hectares || undefined,
-      notes: newTerrain.notes || undefined,
-      created_at: new Date().toISOString(),
-      last_updated: new Date().toISOString()
+    try {
+      setLoading(true)
+      const terrainData = {
+        name: newTerrain.name,
+        latitude: newTerrain.latitude,
+        longitude: newTerrain.longitude,
+        crop_type: newTerrain.crop_type || undefined,
+        area_hectares: newTerrain.area_hectares || undefined,
+        notes: newTerrain.notes || undefined
+      }
+
+      const response = await terrainAPI.createTerrain(terrainData)
+      
+      if (response.success) {
+        // Reload terrains to get the new one with proper ID
+        await loadTerrains()
+        
+        // Reset form
+        setNewTerrain({
+          name: '',
+          latitude: 41.1579,
+          longitude: -8.6291,
+          crop_type: '',
+          area_hectares: 0,
+          notes: ''
+        })
+        setIsAddingTerrain(false)
+      } else {
+        setError(response.message || 'Failed to create terrain')
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to create terrain')
+      console.error('Error creating terrain:', err)
+    } finally {
+      setLoading(false)
     }
-
-    setTerrains([...terrains, terrain])
-    setNewTerrain({
-      name: '',
-      latitude: 41.1579,
-      longitude: -8.6291,
-      crop_type: '',
-      area_hectares: 0,
-      notes: ''
-    })
-    setIsAddingTerrain(false)
   }
 
-  const updateTerrain = (updatedTerrain: Terrain) => {
-    setTerrains(terrains.map(t => 
-      t.id === updatedTerrain.id 
-        ? { ...updatedTerrain, last_updated: new Date().toISOString() }
-        : t
-    ))
+  const updateTerrain = async (updatedTerrain: Terrain) => {
+    try {
+      const updates = {
+        name: updatedTerrain.name,
+        latitude: updatedTerrain.latitude,
+        longitude: updatedTerrain.longitude,
+        crop_type: updatedTerrain.crop_type,
+        area_hectares: updatedTerrain.area_hectares,
+        notes: updatedTerrain.notes
+      }
+
+      const response = await terrainAPI.updateTerrain(parseInt(updatedTerrain.id), updates)
+      
+      if (response.success) {
+        // Reload terrains to get updated data
+        await loadTerrains()
+      } else {
+        setError(response.message || 'Failed to update terrain')
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to update terrain')
+      console.error('Error updating terrain:', err)
+    }
   }
 
-  const deleteTerrain = (terrainId: string) => {
-    if (confirm('Are you sure you want to delete this terrain?')) {
-      setTerrains(terrains.filter(t => t.id !== terrainId))
+  const deleteTerrain = async (terrainId: string) => {
+    if (!confirm('Are you sure you want to delete this terrain?')) return
+
+    try {
+      const response = await terrainAPI.deleteTerrain(parseInt(terrainId))
+      
+      if (response.success) {
+        // Reload terrains to reflect deletion
+        await loadTerrains()
+      } else {
+        setError(response.message || 'Failed to delete terrain')
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to delete terrain')
+      console.error('Error deleting terrain:', err)
     }
   }
 
@@ -120,23 +175,40 @@ export default function AgroDashboard() {
       }
     } catch (error) {
       console.error('Bulk analysis failed:', error)
+      setError('Bulk analysis failed')
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const quickAddLocation = (location: any) => {
-    const terrain: Terrain = {
-      id: `terrain_${Date.now()}`,
-      name: `${location.name} Farm`,
-      latitude: location.latitude,
-      longitude: location.longitude,
-      crop_type: 'Mixed',
-      area_hectares: 10,
-      notes: `Quick-added farm in ${location.name}`,
-      created_at: new Date().toISOString(),
-      last_updated: new Date().toISOString()
+  const quickAddLocation = async (location: any) => {
+    try {
+      const terrainData = {
+        name: `${location.name} Farm`,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        crop_type: 'Mixed',
+        area_hectares: 10,
+        notes: `Quick-added farm in ${location.name}`
+      }
+
+      const response = await terrainAPI.createTerrain(terrainData)
+      if (response.success) {
+        await loadTerrains()
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to add location')
     }
-    setTerrains([...terrains, terrain])
+  }
+
+  // Show loading state
+  if (loading && terrains.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="h-12 w-12 animate-spin text-green-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading your terrains...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -158,7 +230,8 @@ export default function AgroDashboard() {
             <div className="flex items-center space-x-4">
               <button
                 onClick={runBulkAnalysis}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                disabled={terrains.length === 0}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Bulk Analysis
@@ -176,8 +249,24 @@ export default function AgroDashboard() {
         </div>
       </div>
 
-      {/* Dashboard Stats */}
+      {/* Error Display */}
+      {error && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+            <p className="text-red-800">{error}</p>
+            <button 
+              onClick={() => setError(null)}
+              className="text-red-600 hover:text-red-800 ml-2"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Dashboard Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
@@ -231,7 +320,7 @@ export default function AgroDashboard() {
         </div>
 
         {/* Quick Add Locations */}
-        {terrains.length === 0 && (
+        {terrains.length === 0 && !loading && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
             <h3 className="text-lg font-medium text-blue-900 mb-3">Quick Start</h3>
             <p className="text-blue-700 mb-4">Get started quickly by adding some popular farming locations in Portugal:</p>
@@ -320,10 +409,10 @@ export default function AgroDashboard() {
               </button>
               <button
                 onClick={addTerrain}
-                disabled={!newTerrain.name.trim()}
+                disabled={!newTerrain.name.trim() || loading}
                 className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Add Terrain
+                {loading ? 'Adding...' : 'Add Terrain'}
               </button>
             </div>
           </div>
@@ -341,7 +430,7 @@ export default function AgroDashboard() {
               />
             ))}
           </div>
-        ) : (
+        ) : !loading && (
           <div className="text-center py-12">
             <Sprout className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No terrains yet</h3>
