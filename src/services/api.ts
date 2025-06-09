@@ -90,4 +90,60 @@ export const agroAPI = {
   },
 }
 
+export const terrainAPI = {
+  getUserTerrains: async () => {
+    const response = await api.get("/api/terrains")
+    return response.data
+  },
+
+  createTerrain: async (terrain: {
+    name: string
+    latitude: number
+    longitude: number
+    crop_type?: string
+    area_hectares?: number
+    notes?: string
+  }) => {
+    const response = await api.post("/api/terrains", terrain)
+    return response.data
+  },
+
+  getTerrain: async (terrainId: number) => {
+    const response = await api.get(`/api/terrains/${terrainId}`)
+    return response.data
+  },
+
+  updateTerrain: async (terrainId: number, updates: Partial<{
+    name: string
+    latitude: number
+    longitude: number
+    crop_type: string
+    area_hectares: number
+    notes: string
+  }>) => {
+    const response = await api.put(`/api/terrains/${terrainId}`, updates)
+    return response.data
+  },
+
+  deleteTerrain: async (terrainId: number) => {
+    const response = await api.delete(`/api/terrains/${terrainId}`)
+    return response.data
+  },
+
+  getTerrainWeather: async (terrainId: number) => {
+    const response = await api.get(`/api/terrains/${terrainId}/weather`)
+    return response.data
+  },
+
+  getTerrainAgroAnalysis: async (terrainId: number) => {
+    const response = await api.post(`/api/terrains/${terrainId}/agro-analysis`)
+    return response.data
+  },
+
+  getTerrainStats: async () => {
+    const response = await api.get("/api/terrains/stats")
+    return response.data
+  }
+}
+
 export default api

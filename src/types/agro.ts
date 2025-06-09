@@ -23,6 +23,7 @@ export interface AgroSuggestion {
 
 export interface Terrain {
   id: string
+  user_id?: number
   name: string
   latitude: number
   longitude: number
@@ -30,14 +31,34 @@ export interface Terrain {
   area_hectares?: number
   notes?: string
   created_at: string
-  last_updated: string
+  updated_at?: string
 }
 
 export interface AgroAnalysisResponse {
   success: boolean
   weather?: WeatherData
   agro_suggestions?: AgroSuggestion
+  terrain?: Terrain
   error?: string
+}
+
+export interface TerrainStatsResponse {
+  success: boolean
+  stats: {
+    total_terrains: number
+    total_area_hectares: number
+    crop_types: string[]
+    avg_area: number
+  }
+}
+
+export interface TerrainResponse {
+  success: boolean
+  terrain?: Terrain
+  terrains?: Terrain[]
+  count?: number
+  message?: string
+  terrain_id?: number
 }
 
 export type PriorityColor = {
