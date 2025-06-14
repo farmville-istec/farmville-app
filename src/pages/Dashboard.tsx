@@ -9,6 +9,7 @@ import TerrainGrid from '../components/TerrainGrid'
 import WebSocketStatus from '../components/WebSocketStatus'
 import type { Terrain, AgroSuggestion } from '../types/agro'
 import { agroAPI, terrainAPI } from '../services/api'
+import ChatBot from '../components/ChatBot'
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
@@ -17,12 +18,40 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [isAddingTerrain, setIsAddingTerrain] = useState(false)
   const [bulkAnalysis, setBulkAnalysis] = useState<AgroSuggestion[]>([])
+  const [weatherData, setWeatherData] = useState<Record<string, any>>({})
+  const [agroSuggestions, setAgroSuggestions] = useState<Record<string, any>>({})
   const [dashboardStats, setDashboardStats] = useState({
     totalTerrains: 0,
     urgentAlerts: 0,
     avgConfidence: 85,
     lastUpdate: new Date()
   })
+
+  const collectTerrainContextData = useCallback(async (terrainsToProcess: Terrain[]) => {
+    const weatherCache: Record<string, any> = {}
+    const agroCache: Record<string, any> = {}
+
+    const promises = terrainsToProcess.map(async (terrain) => {
+      try {
+        const response = await terrainAPI.getTerrainAgroAnalysis(parseInt(terrain.id))
+        if (response.success) {
+          if (response.weather) {
+            weatherCache[terrain.id] = response.weather
+          }
+          if (response.agro_suggestions) {
+            agroCache[terrain.id] = response.agro_suggestions
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to fetch context for terrain ${terrain.id}:`, error)
+      }
+    })
+
+    await Promise.all(promises)
+    
+    setWeatherData(weatherCache)
+    setAgroSuggestions(agroCache)
+  }, [])
 
   const loadTerrains = useCallback(async () => {
     try {
@@ -32,6 +61,9 @@ export default function Dashboard() {
       
       if (response.success) {
         setTerrains(response.terrains)
+        if (response.terrains.length > 0) {
+          await collectTerrainContextData(response.terrains)
+        }
         setDashboardStats(prev => ({
           ...prev,
           totalTerrains: response.terrains.length,
@@ -46,7 +78,17 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [ collectTerrainContextData ])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (terrains.length > 0) {
+        collectTerrainContextData(terrains)
+      }
+    }, 5 * 60 * 1000)
+
+    return () => clearInterval(interval)
+  }, [terrains, collectTerrainContextData])
 
   useEffect(() => {
     if (user?.id) {
@@ -102,6 +144,16 @@ export default function Dashboard() {
       const response = await terrainAPI.deleteTerrain(parseInt(terrainId))
       
       if (response.success) {
+        setWeatherData(prev => {
+          const newData = { ...prev }
+          delete newData[terrainId]
+          return newData
+        })
+        setAgroSuggestions(prev => {
+          const newData = { ...prev }
+          delete newData[terrainId]
+          return newData
+        })
         await loadTerrains()
       } else {
         setError(response.message || 'Failed to delete terrain')
@@ -122,6 +174,7 @@ export default function Dashboard() {
       const response = await agroAPI.bulkAnalysis(locations)
       if (response.success) {
         setBulkAnalysis(response.suggestions)
+        await collectTerrainContextData(terrains)
       }
     } catch (error) {
       console.error('Bulk analysis failed:', error)
@@ -234,6 +287,12 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      <ChatBot 
+        terrains={terrains}
+        weatherData={weatherData}
+        agroSuggestions={agroSuggestions}
+      />
     </div>
   )
 }
