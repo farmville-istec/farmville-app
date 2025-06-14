@@ -5,7 +5,6 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
 import Dashboard from "./pages/Dashboard"
-import AgroDashboard from "./pages/AgroDashboard"
 import "./App.css"
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -22,7 +21,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="min-h-screen bg-green-50">
+        <div className="min-h-screen bg-gray-50">
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" />} />
             <Route
@@ -46,14 +45,6 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/agro"
-              element={
-                <ProtectedRoute>
-                  <AgroDashboard />
                 </ProtectedRoute>
               }
             />

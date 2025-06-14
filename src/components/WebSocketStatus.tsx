@@ -41,7 +41,6 @@ export default function WebSocketStatus({ showRecentUpdates = true, className = 
 
   return (
     <div className={`bg-white rounded-lg shadow border border-gray-200 p-4 ${className}`}>
-      {/* Connection Status */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
           {connected ? (
@@ -69,7 +68,6 @@ export default function WebSocketStatus({ showRecentUpdates = true, className = 
         </button>
       </div>
 
-      {/* Last Message */}
       {lastMessage && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
           <div className="flex items-center justify-between">
@@ -87,10 +85,8 @@ export default function WebSocketStatus({ showRecentUpdates = true, className = 
         </div>
       )}
 
-      {/* Recent Updates */}
       {showRecentUpdates && (
         <div className="space-y-3">
-          {/* Weather Updates */}
           {weatherUpdates.length > 0 && (
             <div>
               <h4 className="text-xs font-medium text-gray-700 mb-2 flex items-center">
@@ -113,7 +109,6 @@ export default function WebSocketStatus({ showRecentUpdates = true, className = 
             </div>
           )}
 
-          {/* Agro Updates */}
           {agroUpdates.length > 0 && (
             <div>
               <h4 className="text-xs font-medium text-gray-700 mb-2 flex items-center">
@@ -141,7 +136,6 @@ export default function WebSocketStatus({ showRecentUpdates = true, className = 
             </div>
           )}
 
-          {/* No updates */}
           {weatherUpdates.length === 0 && agroUpdates.length === 0 && (
             <div className="text-center py-4">
               <p className="text-xs text-gray-500">No recent updates</p>

@@ -1,173 +1,239 @@
-import { useAuth } from "../contexts/AuthContext"
-import { LogOut, User, Calendar, Sprout, ArrowRight } from "lucide-react"
-import { Link } from "react-router-dom"
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useState, useEffect, useCallback } from 'react'
+import { useAuth } from '../contexts/AuthContext'
+import DashboardHeader from '../components/DashboardHeader'
+import DashboardStats from '../components/DashboardStats'
+import QuickStart from '../components/QuickStart'
+import AddTerrainForm from '../components/AddTerrainForm'
+import TerrainGrid from '../components/TerrainGrid'
+import WebSocketStatus from '../components/WebSocketStatus'
+import type { Terrain, AgroSuggestion } from '../types/agro'
+import { agroAPI, terrainAPI } from '../services/api'
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
+  const [terrains, setTerrains] = useState<Terrain[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [isAddingTerrain, setIsAddingTerrain] = useState(false)
+  const [bulkAnalysis, setBulkAnalysis] = useState<AgroSuggestion[]>([])
+  const [dashboardStats, setDashboardStats] = useState({
+    totalTerrains: 0,
+    urgentAlerts: 0,
+    avgConfidence: 85,
+    lastUpdate: new Date()
+  })
 
-  const handleLogout = () => {
-    logout()
+  const loadTerrains = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await terrainAPI.getUserTerrains()
+      
+      if (response.success) {
+        setTerrains(response.terrains)
+        setDashboardStats(prev => ({
+          ...prev,
+          totalTerrains: response.terrains.length,
+          lastUpdate: new Date()
+        }))
+      } else {
+        setError('Failed to load terrains')
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load terrains')
+      console.error('Error loading terrains:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (user?.id) {
+      loadTerrains()
+    }
+  }, [user?.id, loadTerrains])
+
+  const handleAddTerrain = async (terrainData: any) => {
+    try {
+      setLoading(true)
+      const response = await terrainAPI.createTerrain(terrainData)
+      
+      if (response.success) {
+        await loadTerrains()
+        setIsAddingTerrain(false)
+      } else {
+        setError(response.message || 'Failed to create terrain')
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to create terrain')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return "Never"
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+  const handleUpdateTerrain = async (updatedTerrain: Terrain) => {
+    try {
+      const updates = {
+        name: updatedTerrain.name,
+        latitude: updatedTerrain.latitude,
+        longitude: updatedTerrain.longitude,
+        crop_type: updatedTerrain.crop_type,
+        area_hectares: updatedTerrain.area_hectares,
+        notes: updatedTerrain.notes
+      }
+
+      const response = await terrainAPI.updateTerrain(parseInt(updatedTerrain.id), updates)
+      
+      if (response.success) {
+        await loadTerrains()
+      } else {
+        setError(response.message || 'Failed to update terrain')
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to update terrain')
+    }
+  }
+
+  const handleDeleteTerrain = async (terrainId: string) => {
+    if (!confirm('Are you sure you want to delete this terrain?')) return
+
+    try {
+      const response = await terrainAPI.deleteTerrain(parseInt(terrainId))
+      
+      if (response.success) {
+        await loadTerrains()
+      } else {
+        setError(response.message || 'Failed to delete terrain')
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to delete terrain')
+    }
+  }
+
+  const handleBulkAnalysis = async () => {
+    try {
+      const locations = terrains.map(t => ({
+        name: t.name,
+        latitude: t.latitude,
+        longitude: t.longitude
+      }))
+
+      const response = await agroAPI.bulkAnalysis(locations)
+      if (response.success) {
+        setBulkAnalysis(response.suggestions)
+      }
+    } catch (error) {
+      console.error('Bulk analysis failed:', error)
+      setError('Bulk analysis failed')
+    }
+  }
+
+  const handleQuickAddLocation = async (location: any) => {
+    const terrainData = {
+      name: `${location.name} Farm`,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      crop_type: 'Mixed',
+      area_hectares: 10,
+      notes: `Quick-added farm in ${location.name}`
+    }
+
+    await handleAddTerrain(terrainData)
+  }
+
+  if (loading && terrains.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your dashboard...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-green-50">
-      {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center">
-              <Sprout className="h-8 w-8 text-green-600 mr-3" />
-              <h1 className="text-2xl font-bold text-gray-900">FarmVille Hub</h1>
+    <div className="min-h-screen bg-gray-50">
+      <DashboardHeader
+        username={user?.username || 'User'}
+        onAddTerrain={() => setIsAddingTerrain(true)}
+        onBulkAnalysis={handleBulkAnalysis}
+        onLogout={logout}
+        terrainCount={terrains.length}
+      />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-red-800">{error}</p>
+              <button 
+                onClick={() => setError(null)}
+                className="text-red-600 hover:text-red-800 font-bold text-lg"
+              >
+                ×
+              </button>
             </div>
-            <button
-              onClick={handleLogout}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </button>
           </div>
+        )}
+
+        <DashboardStats stats={dashboardStats} />
+
+        <div className="lg:hidden mb-6">
+          <WebSocketStatus />
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          {/* Welcome Section */}
-          <div className="bg-gradient-to-r from-green-400 to-blue-500 overflow-hidden shadow rounded-lg mb-8">
-            <div className="px-6 py-8 text-white">
-              <h2 className="text-2xl font-bold mb-2">Welcome back, {user?.username}! 🌾</h2>
-              <p className="text-green-100 text-lg">
-                Your intelligent farming assistant is ready to help you optimize your agricultural operations.
-              </p>
+        {isAddingTerrain && (
+          <AddTerrainForm
+            onSubmit={handleAddTerrain}
+            onCancel={() => setIsAddingTerrain(false)}
+            loading={loading}
+          />
+        )}
+
+        {terrains.length > 0 ? (
+          <TerrainGrid
+            terrains={terrains}
+            onUpdate={handleUpdateTerrain}
+            onDelete={handleDeleteTerrain}
+            loading={loading}
+            onRefresh={loadTerrains}
+          />
+        ) : !loading && (
+          <QuickStart
+            onQuickAdd={handleQuickAddLocation}
+            onAddTerrain={() => setIsAddingTerrain(true)}
+          />
+        )}
+
+        {bulkAnalysis.length > 0 && (
+          <div className="mt-8 bg-white rounded-lg shadow-md border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold mb-4">Bulk Analysis Results</h3>
+            <div className="space-y-4">
+              {bulkAnalysis.map((suggestion, index) => (
+                <div key={index} className="border-l-4 border-green-400 pl-4 py-2">
+                  <h4 className="font-medium text-gray-900">{suggestion.location}</h4>
+                  <p className="text-sm text-gray-600 mt-1">{suggestion.suggestions[0]}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      suggestion.priority === 'urgent' ? 'bg-red-100 text-red-800' :
+                      suggestion.priority === 'high' ? 'bg-orange-100 text-orange-800' :
+                      suggestion.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-green-100 text-green-800'
+                    }`}>
+                      {suggestion.priority.toUpperCase()}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      Confidence: {(suggestion.confidence * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-
-          {/* Agricultural Dashboard Card */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            <Link
-              to="/agro"
-              className="group bg-white overflow-hidden shadow rounded-lg hover:shadow-lg transition-shadow duration-200"
-            >
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0 bg-green-500 rounded-md p-3">
-                      <Sprout className="h-8 w-8 text-white" />
-                    </div>
-                    <div className="ml-4">
-                      <h3 className="text-lg font-medium text-gray-900 group-hover:text-green-600">
-                        Agricultural Dashboard
-                      </h3>
-                      <p className="text-sm text-gray-500">
-                        Monitor your terrains, get AI-powered suggestions, and track weather conditions.
-                      </p>
-                    </div>
-                  </div>
-                  <ArrowRight className="h-5 w-5 text-gray-400 group-hover:text-green-600 transition-colors" />
-                </div>
-                
-                <div className="mt-4 grid grid-cols-3 gap-4">
-                  <div className="text-center">
-                    <p className="text-lg font-semibold text-gray-900">0</p>
-                    <p className="text-xs text-gray-500">Terrains</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-lg font-semibold text-gray-900">AI</p>
-                    <p className="text-xs text-gray-500">Suggestions</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-lg font-semibold text-gray-900">Live</p>
-                    <p className="text-xs text-gray-500">Weather</p>
-                  </div>
-                </div>
-              </div>
-            </Link>
-
-            {/* Coming Soon Features */}
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-6">
-                <div className="flex items-center mb-4">
-                  <div className="flex-shrink-0 bg-purple-500 rounded-md p-3">
-                    <Calendar className="h-8 w-8 text-white" />
-                  </div>
-                  <div className="ml-4">
-                    <h3 className="text-lg font-medium text-gray-900">More Features</h3>
-                    <p className="text-sm text-gray-500">
-                      Additional farming tools and analytics coming soon.
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="space-y-3">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <div className="w-2 h-2 bg-yellow-400 rounded-full mr-3"></div>
-                    Weather alerts and notifications
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <div className="w-2 h-2 bg-yellow-400 rounded-full mr-3"></div>
-                    Crop yield predictions
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <div className="w-2 h-2 bg-yellow-400 rounded-full mr-3"></div>
-                    Market price forecasting
-                  </div>
-                </div>
-                
-                <div className="mt-4 text-xs text-purple-600 font-medium">
-                  🚀 Coming Soon
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* User Info Card */}
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="px-6 py-5">
-              <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                <User className="h-5 w-5 mr-2 text-green-600" />
-                Account Information
-              </h3>
-
-              <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
-                <div>
-                  <dt className="text-sm font-medium text-gray-500">Username</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{user?.username}</dd>
-                </div>
-
-                <div>
-                  <dt className="text-sm font-medium text-gray-500">Email</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{user?.email || "Not provided"}</dd>
-                </div>
-
-                <div>
-                  <dt className="text-sm font-medium text-gray-500">User ID</dt>
-                  <dd className="mt-1 text-sm text-gray-900">#{user?.id}</dd>
-                </div>
-
-                <div>
-                  <dt className="text-sm font-medium text-gray-500 flex items-center">
-                    <Calendar className="h-4 w-4 mr-1" />
-                    Last Login
-                  </dt>
-                  <dd className="mt-1 text-sm text-gray-900">{formatDate(user!.last_login)}</dd>
-                </div>
-              </dl>
-            </div>
-          </div>
-        </div>
-      </main>
+        )}
+      </div>
     </div>
   )
 }

@@ -6,25 +6,25 @@ export default function WebSocketTest() {
 
   const testPing = () => {
     sendMessage('ping', { test: true, timestamp: new Date().toISOString() })
-    console.log('📤 Ping sent!')
+    console.log('Ping sent!')
   }
 
   const testTerrainSubscription = () => {
     const testTerrainId = 'test_terrain_123'
     sendMessage('subscribe_terrain', { terrain_id: testTerrainId })
-    console.log(`📤 Subscribed to terrain: ${testTerrainId}`)
+    console.log(`Subscribed to terrain: ${testTerrainId}`)
   }
 
   const requestWeatherUpdate = () => {
     sendMessage('request_weather_update', { terrain_id: 'porto_farm' })
-    console.log('📤 Requested weather update!')
+    console.log('Requested weather update!')
   }
 
   if (!connected) {
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
         <p className="text-yellow-800 text-sm">
-          ⚠️ WebSocket not connected. Start the backend server to test real-time features.
+          WebSocket not connected. Start the backend server to test real-time features.
         </p>
       </div>
     )
@@ -65,7 +65,7 @@ export default function WebSocketTest() {
 
       <div className="mt-4 p-3 bg-gray-50 rounded text-sm">
         <p className="text-gray-600">
-          💡 <strong>Tip:</strong> Open browser console (F12) to see WebSocket messages and events.
+          <strong>Tip:</strong> Open browser console (F12) to see WebSocket messages and events.
         </p>
       </div>
     </div>
