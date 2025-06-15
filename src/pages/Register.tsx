@@ -22,7 +22,6 @@ export default function Register() {
     setLoading(true)
     setMessage("")
 
-    // Validate passwords match
     if (password !== confirmPassword) {
       setMessage("Passwords do not match")
       setMessageType("error")
@@ -30,7 +29,6 @@ export default function Register() {
       return
     }
 
-    // Validate password length
     if (password.length < 6) {
       setMessage("Password must be at least 6 characters")
       setMessageType("error")

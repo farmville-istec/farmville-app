@@ -28,7 +28,7 @@ export default function DashboardHeader({
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Agricultural Dashboard</h1>
                 <p className="text-sm text-gray-600">
-                  Welcome back, {username}! 🌾
+                  Welcome back, {username}!
                 </p>
               </div>
             </div>
